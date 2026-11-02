@@ -9,13 +9,32 @@ Next-message suggestions for DeepSeek Harness, with an independently selected pr
 - 模型与主会话独立，复用 DSH 已配置的提供商和凭据。
 - 中文 / English、Sparkles 图标、主题适配、持久化设置。
 
+## 效果预览 / Screenshots
+
+### 回复结束后，给下一条消息一个起点
+
+![Nextline 使用效果：输入框上方单行展示建议，右侧提供 Tab 提示和忽略按钮](<assets/prediction-demo.png>)
+
+建议显示在原输入框上方，不替你发送。点击建议或在空输入框按 Tab，可把**完整建议**填入草稿；长文本在界面上省略，鼠标悬停可查看全文。
+
+> 图中对话正文的 `no-completed-turn` 是当时回复还未结束、没有可预测轮次的正常返回，不是下方预测条的错误状态；截图下方已经出现了回复完成后的建议。正文下方的 26.7K tok 是宿主显示的会话用量，不能据此推算单次预测消耗。图中的“完全权限”是当时宿主状态，不是使用 Nextline 的前提。
+
+### 在设置中独立选择预测模型
+
+![Nextline 设置页：启用开关、自动预测、独立提供商与模型、用量限制和诊断](<assets/settings.png>)
+
+打开「设置 → 输入预测」，选择已在 DSH 中配置的提供商和模型并保存。截图中的 Magpie / `qoder-cn/qfmodel` 仅为个人配置示例，不是指定依赖或效果推荐；旁边的订阅、侧边卡片等入口来自其他插件，不属于 Nextline。
+
+以上为作者提供的 Windows Desktop 浅色界面实机截图；用于展示操作位置和当前效果，不代表所有系统、主题或模型均完成验证。
+
 ## 兼容性 / Compatibility
 
 首个公开版本仅声明支持 **DSH `0.2.1-rc.5`** 的 Desktop / Web 会话界面。Node.js 24+ 用于本地构建和测试。
 
 - 作者的 Windows Desktop rc.5 环境验证过 Host 配置/RPC、会话上下文、前端插槽恢复和插件禁用/启用生命周期。
 - 40 项自动化回归测试覆盖预测上下文、超时、独立取消、缓存竞争、配置重连、Tab 决策、显示结构及导航图标适配。
-- 没有独立验证其他操作系统、CLI/Web 的完整交互、浏览器点击/悬浮/中文输入法及所有主题视觉。
+- 已补充作者提供的设置页与自动预测实机截图；截图确认当前环境的界面展示和建议生成，不单独证明点击/Tab/悬浮/中文输入法等完整交互均通过。
+- 没有独立验证其他操作系统、CLI/Web 的完整交互及所有主题视觉。
 - **尚未获得 dsh.so 的独立 Verified 认证**；版本限制不代表官方认证。
 
 ## 安装 / Installation
@@ -30,9 +49,9 @@ github:jesongit/dsh-nextline#v1.0.0
 
 或从 [GitHub Releases](https://github.com/jesongit/dsh-nextline/releases/tag/v1.0.0) 下载 `dsh-nextline-1.0.0.tgz`，选择本地包安装。发行包包含预构建 Client，不需要授权安装脚本。不要求安装 npm 上的同名包；本版只在 GitHub 发布。
 
-### CLI 管理的 Web profile
+### CLI 管理的 Web profile（安装流程未实测）
 
-先确认 `dsh --version` 为 `0.2.1-rc.5`，再替换下面的 `web` 为自己的 **非 Desktop** profile：
+以下为命令行安装方式，尚未完成独立端到端验证。先确认 `dsh --version` 为 `0.2.1-rc.5`，再替换下面的 `web` 为自己的 **非 Desktop** profile：
 
 ```sh
 dsh plugin --profile web add github:jesongit/dsh-nextline#v1.0.0
