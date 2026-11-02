@@ -1,0 +1,4 @@
+- insert:
+    - id: nextline
+      name: dsh-nextline
+      config: {}

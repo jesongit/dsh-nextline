@@ -1,0 +1,95 @@
+# dsh-nextline
+
+**Nextline — 输入预测**：DSH 回复结束后，使用独立选择的模型，建议一条完整的下一条用户消息。建议出现在输入框上方；点击或按 Tab 只填入草稿，**绝不自动发送，也不覆盖已有草稿**。
+
+Next-message suggestions for DeepSeek Harness, with an independently selected prediction model. Suggestions become editable drafts, never automatic messages.
+
+- 自动预测或空输入框中按 Tab 请求，再按 Tab 接受。
+- 固定单行显示，超出省略；鼠标悬停查看全文。
+- 模型与主会话独立，复用 DSH 已配置的提供商和凭据。
+- 中文 / English、Sparkles 图标、主题适配、持久化设置。
+
+## 兼容性 / Compatibility
+
+首个公开版本仅声明支持 **DSH `0.2.1-rc.5`** 的 Desktop / Web 会话界面。Node.js 24+ 用于本地构建和测试。
+
+- 作者的 Windows Desktop rc.5 环境验证过 Host 配置/RPC、会话上下文、前端插槽恢复和插件禁用/启用生命周期。
+- 40 项自动化回归测试覆盖预测上下文、超时、独立取消、缓存竞争、配置重连、Tab 决策、显示结构及导航图标适配。
+- 没有独立验证其他操作系统、CLI/Web 的完整交互、浏览器点击/悬浮/中文输入法及所有主题视觉。
+- **尚未获得 dsh.so 的独立 Verified 认证**；版本限制不代表官方认证。
+
+## 安装 / Installation
+
+### Desktop（推荐）
+
+在 DSH「设置 → 插件」的组合包安装入口粘贴：
+
+```text
+github:jesongit/dsh-nextline#v1.0.0
+```
+
+或从 [GitHub Releases](https://github.com/jesongit/dsh-nextline/releases/tag/v1.0.0) 下载 `dsh-nextline-1.0.0.tgz`，选择本地包安装。发行包包含预构建 Client，不需要授权安装脚本。不要求安装 npm 上的同名包；本版只在 GitHub 发布。
+
+### CLI 管理的 Web profile
+
+先确认 `dsh --version` 为 `0.2.1-rc.5`，再替换下面的 `web` 为自己的 **非 Desktop** profile：
+
+```sh
+dsh plugin --profile web add github:jesongit/dsh-nextline#v1.0.0
+# 或使用已下载的预构建包：
+dsh plugin --profile web add ./dsh-nextline-1.0.0.tgz
+```
+
+不要用另一版本的 npm CLI 管理 Desktop 保留 profile。普通启用/禁用通过宿主客户端同步；现有 npm 模块升级是否需要重启以 DSH 插件管理结果为准，不承诺所有更新无需重启。
+
+卸载：在 Desktop 插件管理移除组合包；CLI profile 使用 `dsh plugin --profile web remove dsh-nextline`。
+
+### 从旧本地版迁移
+
+若已经安装开发阶段的 `@local/dsh-composer-predictions`，**不要同时启用两者**：它们保留相同的服务/投影/界面身份，会冲突。先记录模型与参数，禁用旧包，再安装本包并在设置中重新保存；新插件行 id 为 `nextline`，不会自动搬移旧行配置。旧版仍可保留为禁用状态供回退。
+
+## 使用 / Usage
+
+1. 打开「设置 → 输入预测」。
+2. 选择提供商与预测模型，保存。首次安装不预选模型，因此不会自行发起模型请求。
+3. 正常完成一轮对话，保持输入框为空；开启自动预测时，稳定 350ms 后请求建议。
+4. 点击建议或在原输入框按 Tab，全文填入草稿；检查后自行发送。
+5. 关闭自动预测时，在聚焦的空输入框按 Tab 请求，再按 Tab 接受；生成时重复 Tab 不重复请求。也可以点击预测/重试入口。
+
+输入文字、添加附件或开始新一轮会取消预测。需要正常完成的主会话轮次；停止/失败轮次、子代理、附件/命令/提交状态或禁用输入时不触发。模型可返回无建议；超时可重试。接受/忽略状态只保持当前组件生命周期，同轮次同配置可命中进程内缓存。
+
+## 隐私、费用与安全 / Privacy and cost
+
+- 将当前会话近期的 **user / assistant 文本**发送给你选择的预测提供商，**可能产生正常模型费用**。
+- 不主动读取工具结果、reasoning、文件、图片或输入草稿；文本消息里本来就存在的敏感信息仍可能随上下文发送，请按自己的数据政策选择提供商。
+- 不创建额外遥测、分析或固定外传接口；模型请求经 DSH 已配置的提供商路由。
+- 预测请求没有工具，不启动主 Agent；不执行模型生成的命令，不自动发送消息。
+- 有上下文/输出/超时上限、轮次栅栏、独立取消与内存缓存；不保存磁盘预测缓存。提供商是否立即释放网络资源取决于其取消支持。
+- 预测可能错误或不合意，发送前必须检查。
+
+默认限制：上下文 16000 字符、输出 1024 tokens、20 秒超时。可在设置中调整；「性能诊断」仅含本次页面阶段计时，不含正文，不写磁盘。
+
+## 实现与已知限制
+
+- Host Session projection 发布完成轮次；Client 使用 `conversation.input.dock` 与官方输入/会话 hooks。不是覆盖输入框 placeholder 的 ghost text。
+- 上下文沿有效 surface 尾部提取，保留宿主消息替换语义；旧 API 缺失时使用宿主标准派生，节点不完整时关闭预测。
+- Host peer dependencies 通过 DSH runtime resolution 解析；无机器路径扫描，无本地绝对路径，无捆绑第二份 DSH/Cordis。
+- 配置读取与流订阅独立启动，带有版本/实例栅栏、超时、有限退避重连；词典、订阅、监听器随插件卸载清理。
+- **导航图标兼容适配**：rc.5 不提供自定义 settings nav 图标字段。本插件按当前本地化标题精确匹配设置导航的 `svg + span` 按钮，将自身默认齿轮替换为同源 Sparkles，保留宿主 class。使用合并触发的 MutationObserver；卸载断开、取消计时并还原。结构不符就不改；宿主升级可能使它失效。不会修改其他导航项或 DSH 核心文件。
+- 仅导出的 `composer_predictions` 工具提供 settings/configure/models/predict，与 UI 共用服务，不修改草稿。
+
+## 开发 / Development
+
+```sh
+node build-client.mjs
+node --check index.js
+node --check client.js
+node --test tests/*.test.mjs
+npm pack --ignore-scripts
+```
+
+纯 JavaScript，无编译依赖。Client 只使用宿主 React，没有 CDN、额外 React 或图标运行库。仓库提交预构建 `client.js`；修改源码后运行构建并提交产物。包的 `prepack` 仅本地构建，不定义 `prepare`、`install` 或 `postinstall`。单元测试不调用真实模型。集成验证必须在匹配版本 DSH 内执行，不能用普通 Node 的模块缺失冒充宿主错误。
+
+## 许可 / License
+
+[MIT](LICENSE)，Copyright © 2026 jesongit。Lucide Sparkles 按 ISC 许可分发，见 [第三方声明](THIRD-PARTY-NOTICES.md)。插件管理图标为本项目原创 SVG。问题与兼容性报告请提交到 [GitHub Issues](https://github.com/jesongit/dsh-nextline/issues)。

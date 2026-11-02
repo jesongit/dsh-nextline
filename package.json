@@ -1,0 +1,20 @@
+{
+  "name": "dsh-nextline",
+  "version": "1.0.0",
+  "description": "Predict your next complete message in DeepSeek Harness with an independently selected model. Draft-only, never auto-send.",
+  "license": "MIT",
+  "author": "jesongit",
+  "repository": {"type": "git", "url": "git+https://github.com/jesongit/dsh-nextline.git"},
+  "homepage": "https://github.com/jesongit/dsh-nextline#readme",
+  "bugs": {"url": "https://github.com/jesongit/dsh-nextline/issues"},
+  "keywords": ["dsh-plugin", "deepseek-harness", "autocomplete", "next-message", "prediction", "composer"],
+  "type": "module",
+  "main": "./index.js",
+  "exports": {".": "./index.js", "./client": "./client.js", "./locale/*.json": "./locale/*.json", "./icon": "./icon.svg", "./package.json": "./package.json"},
+  "files": ["index.js", "host-service.js", "host-flight.js", "engine.js", "interaction.js", "settings-store.js", "protocol.js", "client.js", "client-source.js", "build-client.mjs", "cordis.patch.yml", "locale/*.json", "icon.svg", "prediction-view.js", "nav-icon.js", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "CHANGELOG.md"],
+  "engines": {"node": ">=24", "dsh": "0.2.1-rc.5"},
+  "peerDependencies": {"@deepseek-ai/dsh-llm": "0.2.1-rc.5", "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.5", "@deepseek-ai/schemastery": "^3.18.5"},
+  "dependencies": {"zod": "4.4.3"},
+  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}, "client": {"platform": "web", "immediately": true, "inject": ["@deepseek-ai/dsh-api-gateway", "@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-ui-settings", "@deepseek-ai/dsh-client-shortcuts"]}},
+  "scripts": {"build": "node build-client.mjs", "test": "node --test tests/*.test.mjs", "prepack": "node build-client.mjs"}
+}

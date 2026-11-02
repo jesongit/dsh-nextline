@@ -1,0 +1,11 @@
+import {readFileSync, writeFileSync} from 'node:fs';
+const protocol = readFileSync(new URL('./protocol.js', import.meta.url), 'utf8').replace(/^export /gm, '');
+const interaction = readFileSync(new URL('./interaction.js', import.meta.url), 'utf8').replace(/^export /gm, '');
+const settingsStore = readFileSync(new URL('./settings-store.js', import.meta.url), 'utf8').replace(/^export /gm, '');
+const view = readFileSync(new URL('./prediction-view.js', import.meta.url), 'utf8').replace(/^export /gm, '');
+const navIcon = readFileSync(new URL('./nav-icon.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
+const source = readFileSync(new URL('./client-source.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
+const en = readFileSync(new URL('./locale/en.json', import.meta.url), 'utf8');
+const zh = readFileSync(new URL('./locale/zh.json', import.meta.url), 'utf8');
+writeFileSync(new URL('./client.js', import.meta.url), `window.__ModuleLoader__.load({id: 'dsh-nextline', factory(require) {\n${protocol}\n${interaction}\n${settingsStore}\n${view}\n${navIcon}\nconst en = ${en};\nconst zh = ${zh};\n${source}\nreturn clientPlugin(require('react'));\n}});\n`);
+console.log('Built client.js (React is the only browser runtime import).');
