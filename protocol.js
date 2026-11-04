@@ -13,11 +13,22 @@ const codec = (name, parse) => ({mode: 'strict', typeSymbol: `${PACKAGE}#${name}
 const json = codec('Json', jsonValue);
 const sessionId = codec('SessionId', v => {if (typeof v !== 'string' || !v || v.length > 200) throw new Error('Invalid sessionId'); return v;});
 const sourceSeq = codec('SourceSeq', v => {if (!Number.isSafeInteger(v) || v < 0) throw new Error('Invalid sourceSeq'); return v;});
+export const MAX_DRAFT_CHARS = 8000;
+export function normalizeDraft(value) {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string' || value.length > MAX_DRAFT_CHARS) throw new Error(`Invalid draft (string up to ${MAX_DRAFT_CHARS} characters)`);
+  return value;
+}
+const draft = codec('Draft', v => {
+  if (typeof v !== 'string' || v.length > MAX_DRAFT_CHARS) throw new Error(`Invalid draft (string up to ${MAX_DRAFT_CHARS} characters)`);
+  return v;
+});
 const string = codec('Provider', v => {if (typeof v !== 'string' || v.length > 200) throw new Error('Invalid provider'); return v;});
 const settings = codec('SettingsPatch', v => {const x = jsonValue(v); if (!x || Array.isArray(x) || typeof x !== 'object') throw new Error('Expected settings object'); return x;});
 const specs = [
   ['readSettings', []], ['saveSettings', [['patch', settings]]], ['models', [['provider', string]]], ['watchSettings', [], true, true],
-  ['predict', [['sessionId', sessionId], ['sourceSeq', sourceSeq]], true]
+  ['predict', [['sessionId', sessionId], ['sourceSeq', sourceSeq]], true],
+  ['predictDraft', [['sessionId', sessionId], ['sourceSeq', sourceSeq], ['draft', draft]], true]
 ];
 export function descriptors() {
   return specs.map(([method, params, cancellation, stream]) => ({
@@ -33,6 +44,7 @@ export function reflection() {
     {kind: 'method', name: 'saveSettings', signature: 'saveSettings(patch: object): Promise<object>', summary: 'Persist a validated configuration patch.'},
     {kind: 'method', name: 'watchSettings', signature: 'watchSettings(signal: AbortSignal): AsyncIterable<object>', summary: 'Subscribe to versioned settings snapshots for this connection generation.'},
     {kind: 'method', name: 'models', signature: 'models(provider: string): Promise<object[]>', summary: 'List models for an existing DSH provider.'},
-    {kind: 'method', name: 'predict', signature: 'predict(sessionId: string, sourceSeq: number, signal: AbortSignal): Promise<object>', summary: 'Generate one suggestion for an exact completed turn without sending it.'}
+    {kind: 'method', name: 'predict', signature: 'predict(sessionId: string, sourceSeq: number, signal: AbortSignal): Promise<object>', summary: 'Generate one whole-message suggestion for an exact completed turn without sending it.'},
+    {kind: 'method', name: 'predictDraft', signature: 'predictDraft(sessionId: string, sourceSeq: number, draft: string, signal: AbortSignal): Promise<object>', summary: 'Generate one continuation for the exact given draft text at a completed turn without sending it.'}
   ], types: []}], objects: [], events: []};
 }

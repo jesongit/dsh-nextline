@@ -1,5 +1,5 @@
 import {contribution} from './protocol.js';
-import {tabPredictionAction} from './interaction.js';
+import {tabPredictionAction, draftAnchorKey, anchorMatches} from './interaction.js';
 import {createSettingsStore} from './settings-store.js';
 import {predictionSurface, SPARKLES_PARTS} from './prediction-view.js';
 import {installPredictionNavIcon} from './nav-icon.js';
@@ -17,7 +17,7 @@ export function clientPlugin(React) {
     const t = ctx.locale.bind(localeNamespace);
     ctx.effect(() => installPredictionNavIcon({label: () => t('title'), subscribe: fn => ctx.locale.subscribe(fn)}), 'composer-predictions: settings nav Sparkles');
     const api = ctx.get('remote.composerPredictions');
-    const timings = {rpcMountMs: Math.round(performance.now() - activationStarted)};
+    const timings = {rpcMountMs: Math.round(performance.now() - activationStarted), build: 'draft-anchor-v2'};
     const store = createSettingsStore({readSettings: () => call('readSettings'), watchSettings: signal => api.watchSettings(signal),
       onTiming: (name, ms) => {timings[name] = Math.round(ms); if (timings.firstConfigReadyMs === undefined) timings.firstConfigReadyMs = Math.round(performance.now() - activationStarted);}});
     const read = store.getSnapshot;
@@ -55,46 +55,51 @@ export function clientPlugin(React) {
       const boundary = props.useProjection('composerPredictions');
       const block = props.usePredictionBlock(s => s);
       const [result, setResult] = useState(null);
-      const [manual, setManual] = useState({sourceSeq: -1, nonce: 0});
+      const [manual, setManual] = useState({sourceSeq: -1, nonce: 0, anchor: null});
       const dismissed = useRef(-1), request = useRef(null), accepted = useRef(null);
       const current = useRef(null);
       const sourceSeq = boundary?.sourceSeq ?? -1;
+      const anchor = draftAnchorKey(draft);
       const eligible = !config.syncing && !!settings?.enabled && !!settings?.provider && !!settings?.model && sourceSeq >= 0 && !boundary?.running &&
-        !sessionRunning && !sessionRemoved && !sessionSubagent && !block && inputPhase === 'plain' && draft === '' && attachmentCount === 0;
-      current.current = {eligible, sourceSeq, draftRev};
+        !sessionRunning && !sessionRemoved && !sessionSubagent && !block && inputPhase === 'plain' && attachmentCount === 0;
+      current.current = {eligible, sourceSeq, draftRev, anchor};
       useEffect(() => {
-        if (!eligible || !(settings.automatic || manual.sourceSeq === sourceSeq) || dismissed.current === sourceSeq || accepted.current === sourceSeq) {request.current?.abort(); request.current = null; setResult(null); return;}
+        if (!eligible || !(settings.automatic && anchor === '' || manual.sourceSeq === sourceSeq && manual.anchor === anchor) || dismissed.current === sourceSeq || accepted.current === sourceSeq) {request.current?.abort(); request.current = null; setResult(null); return;}
         const controller = new AbortController();
         request.current = controller;
         let alive = true;
-        setResult({status: 'loading'});
+        setResult({status: 'loading', anchor});
         const timer = setTimeout(() => {
           const started = performance.now();
-          call('predict', props.sessionId, sourceSeq, controller.signal).then(value => {
-            if (alive && current.current.eligible && current.current.sourceSeq === sourceSeq) {
+          // Empty composer predicts a whole message; a draft continues that exact text.
+          // Cancellation signal always travels after the declared business arguments.
+          const whole = anchor === '';
+          call(whole ? 'predict' : 'predictDraft', props.sessionId, sourceSeq, ...(whole ? [controller.signal] : [anchor, controller.signal])).then(value => {
+            if (alive && current.current.eligible && current.current.sourceSeq === sourceSeq && current.current.anchor === anchor) {
               timings.predictionRoundTripMs = Math.round(performance.now() - started);
               timings.lastPrediction = value.meta || null;
-              setResult(value);
+              setResult(anchor === '' ? value : {...value, anchor});
             }
-          }, error => {if (alive && !controller.signal.aborted) setResult({status: 'error', message: error.message});})
+          }, error => {if (alive && !controller.signal.aborted) setResult({status: 'error', message: error.message, anchor});})
             .finally(() => {if (request.current === controller) request.current = null;});
         }, manual.sourceSeq === sourceSeq ? 0 : 350);
         return () => {alive = false; clearTimeout(timer); controller.abort(); if (request.current === controller) request.current = null;};
-      }, [eligible, sourceSeq, draftRev, settings, manual, props.sessionId, config.generation, config.instanceId]);
+      }, [eligible, sourceSeq, anchor, draftRev, settings, manual, props.sessionId, config.generation, config.instanceId]);
       const dismiss = useCallback(() => {dismissed.current = sourceSeq; request.current?.abort(); setResult(null);}, [sourceSeq]);
       const requestPrediction = useCallback(() => {
         if (!current.current?.eligible || request.current || read().settings !== settings || read().syncing) return false;
         const live = props.getPredictionInput();
         const state = live.state.getSnapshot();
         const liveSession = ctx.sessions.binding(props.sessionId)?.session.getSnapshot();
-        if (!liveSession || liveSession.running || liveSession.removed || liveSession.subagent || state.draft !== '' || state.phase !== 'plain' || state.attachmentIds.length || props.getPredictionBlock()) return false;
+        if (!liveSession || liveSession.running || liveSession.removed || liveSession.subagent || state.phase !== 'plain' || state.attachmentIds.length || props.getPredictionBlock()) return false;
+        const liveAnchor = draftAnchorKey(state.draft);
         dismissed.current = -1; accepted.current = null;
         // Immediate latch prevents two Tab events before React's next commit.
         request.current = {abort() {}};
-        setResult({status: 'loading', sourceSeq});
-        setManual(x => ({sourceSeq, nonce: x.nonce + 1}));
+        setResult({status: 'loading', sourceSeq, anchor: liveAnchor});
+        setManual(x => x.sourceSeq === sourceSeq && x.anchor === liveAnchor ? {sourceSeq, anchor: liveAnchor, nonce: x.nonce + 1} : {sourceSeq, anchor: liveAnchor, nonce: 0});
         return true;
-      }, [sourceSeq, settings, props.getPredictionInput, props.getPredictionBlock, props.sessionId]);
+      }, [sourceSeq, settings, manual, props.getPredictionInput, props.getPredictionBlock, props.sessionId]);
       const accept = useCallback(() => {
         const now = current.current;
         if (read().settings !== settings || read().syncing) return false;
@@ -103,10 +108,13 @@ export function clientPlugin(React) {
         const liveState = live.state.getSnapshot();
         const liveSession = ctx.sessions.binding(props.sessionId)?.session.getSnapshot();
         if (!liveSession || liveSession.running || liveSession.removed || liveSession.subagent) return false;
-        if (liveState.draft !== '' || liveState.phase !== 'plain' || liveState.attachmentIds.length || props.getPredictionBlock()) return false;
+        if (liveState.phase !== 'plain' || liveState.attachmentIds.length || props.getPredictionBlock()) return false;
+        // The suggestion is anchored to the draft the request was made from:
+        // accept only while the composer still shows exactly that content.
+        if (!anchorMatches(result.anchor ?? '', draftAnchorKey(liveState.draft))) return false;
         const span = props.inputActions.captureInsertion();
-        if (span.draftRev !== now.draftRev || span.start !== 0 || span.end !== 0) return false;
-        if (!props.inputActions.insertText(result.text, span)) {setResult({status: 'error', message: t('draftChanged')}); return false;}
+        if (span.draftRev !== now.draftRev) return false;
+        if (!props.inputActions.insertText(result.text, span)) {setResult({status: 'error', message: t('draftChanged'), anchor: result.anchor}); return false;}
         accepted.current = sourceSeq;
         setResult(null); live.focus(); return true;
       }, [result, sourceSeq, settings, props.inputActions, props.getPredictionInput, props.getPredictionBlock]);
@@ -122,7 +130,8 @@ export function clientPlugin(React) {
           if (occurrence?.dataset.conversationSession !== props.sessionId || region?.dataset.conversationRegion !== 'composer' || !occurrence.contains(region) || !c.target.closest('[data-composer-input]') || c.target.closest('[data-approval-key], iframe, .xterm, [inert]')) return;
           if (g.code !== 'Tab') return;
           const action = tabPredictionAction({eligible: current.current.eligible, status: result?.status, resultSeq: result?.sourceSeq, sourceSeq,
-            dismissed: dismissed.current === sourceSeq, accepted: accepted.current === sourceSeq, pending: !!request.current});
+            dismissed: dismissed.current === sourceSeq, accepted: accepted.current === sourceSeq, pending: !!request.current,
+            anchor: current.current.anchor, resultAnchor: result?.anchor});
           if (action === 'wait' || (action === 'accept' && accept()) || (action === 'request' && requestPrediction())) event.consume();
         });
       }, [result, eligible, accept, requestPrediction, sourceSeq, props.sessionId]);
@@ -130,8 +139,9 @@ export function clientPlugin(React) {
         return surface(t(config.error ? 'configFailed' : 'loading'), config.error && button(t('retry'), () => store.restart()));
       }
       if (!eligible || dismissed.current === sourceSeq || accepted.current === sourceSeq) return null;
-      if (!settings.automatic && manual.sourceSeq !== sourceSeq) return surface(t('generate'), tabHint, {onClick: requestPrediction, label: t('generate')});
+      if (!settings.automatic && !(manual.sourceSeq === sourceSeq && manual.anchor === anchor) && !anchorMatches(result?.anchor, anchor)) return surface(t('generate'), tabHint, {onClick: requestPrediction, label: t('generate')});
       if (!result || result.status === 'skipped' || (result.sourceSeq !== undefined && result.sourceSeq !== sourceSeq)) return null;
+      if (!anchorMatches(result.anchor ?? '', anchor)) return null;
       if (result.status === 'loading') return surface(t('generating'), dismissButton(dismiss));
       if (result.status === 'empty') return surface(t('noSuggestion'), dismissButton(dismiss));
       if (result.status === 'error') return surface(result.code === 'timeout' ? t('timedOut') : t('failed') + ' ' + result.message,

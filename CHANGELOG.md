@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 — 2026-11-04
+
+- Tab while the composer already has text now continues the current draft instead of only whole-message suggestions. Suggestions are anchored to the exact draft content at request time: any edit invalidates the pending suggestion and Tab re-predicts from the new content; acceptance appends the continuation at the caret.
+- `predict` gained an optional draft parameter (dedicated continuation system prompt, per-draft cache and flight keys, tightened 4000-character context budget, drafts capped at 8000 characters); the `composer_predictions` tool exposes it as `draft`.
+- Content-anchored Tab decisions, per-draft caching/regressions, and updated privacy and usage copy in both locales.
+
 ## 1.0.0 — 2026-11-02
 
 First public release as **dsh-nextline**, based on the locally tested Composer Predictions 1.2.4 implementation.

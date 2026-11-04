@@ -1,9 +1,9 @@
 {
-  "meta":{"title":"Nextline — 输入预测","description":"回复结束后预测下一条消息，可独立选择预测模型。仅填入草稿，绝不自动发送。"},
+  "meta":{"title":"Nextline — 输入预测","description":"回复结束后预测下一条消息，输入已有文字时续写当前草稿；可独立选择预测模型。仅填入草稿，绝不自动发送。"},
   "title":"输入预测","intro":"回复结束后，建议一条有用的下一步消息。接受后填入可编辑草稿，仍由你决定是否发送。",
-  "enabled":"启用输入预测","enabledHint":"建议不会覆盖你已输入的文字，也不会自动发送。","automatic":"回复后自动预测","automaticHint":"关闭后，空输入框获得焦点时按 Tab 或点击按钮请求预测；有建议时再按 Tab 填入。",
+  "enabled":"启用输入预测","enabledHint":"建议不会覆盖你已输入的文字，也不会自动发送。","automatic":"回复后自动预测","automaticHint":"关闭后，聚焦输入框按 Tab 或点击按钮请求预测：空输入框预测整条消息，已有文字则续写当前草稿；有建议时再按 Tab 填入，文字一变即作废重测。",
   "provider":"预测提供商","providerHint":"复用「模型」中已配置的提供商和凭据。","chooseProvider":"选择提供商","model":"预测模型","modelHint":"独立于当前会话模型，不会修改主模型。","chooseModel":"选择或输入模型 ID",
   "advanced":"用量与性能限制","context":"上下文字符上限","tokens":"输出 Token 上限","timeout":"超时（毫秒）",
-  "privacy":"仅将当前会话近期的对话文本发送至所选预测提供商，不发送输入草稿、思考过程、文件内容或工具结果。模型请求可能产生正常费用。建议可能不符合你的意图，请检查后再发送。",
-  "save":"保存设置","saving":"正在保存…","saved":"已保存","saveFailed":"保存失败。","loading":"正在加载设置…","configFailed":"输入预测配置暂不可用，正在自动重连。","noSuggestion":"当前没有合适的下一条消息建议。","timedOut":"预测超时，请重试或在设置中调整超时。","diagnostics":"性能诊断（毫秒，仅本次页面）","retry":"重试","dismiss":"忽略","generate":"预测下一条消息","generating":"正在预测下一条消息…","suggestion":"下一条消息建议","insert":"填入草稿","failed":"预测失败。","draftChanged":"草稿已改变，未覆盖你的输入。"
+  "privacy":"仅将当前会话近期的对话文本发送至所选预测提供商；对已有文字按 Tab 续写时，会一并发送该草稿原文。不发送思考过程、文件内容或工具结果。模型请求可能产生正常费用。建议可能不符合你的意图，请检查后再发送。",
+  "save":"保存设置","saving":"正在保存…","saved":"已保存","saveFailed":"保存失败。","loading":"正在加载设置…","configFailed":"输入预测配置暂不可用，正在自动重连。","noSuggestion":"当前没有合适的下一条消息建议。","timedOut":"预测超时，请重试或在设置中调整超时。","diagnostics":"性能诊断（毫秒，仅本次页面）","retry":"重试","dismiss":"忽略","generate":"预测下一条消息","generating":"正在预测下一条消息…","suggestion":"下一条消息建议","insert":"填入草稿","failed":"预测失败。","draftChanged":"草稿已改变，请重新按 Tab 预测。"
 }

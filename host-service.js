@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
-import {DEFAULTS, PROJECTION, SYSTEM, initialBoundary, foldBoundary, contextFromSession, collectPrediction, validateSettings} from './engine.js';
-import {SERVICE} from './protocol.js';
+import {DEFAULTS, PROJECTION, SYSTEM, SYSTEM_DRAFT, initialBoundary, foldBoundary, contextFromSession, collectPrediction, validateSettings} from './engine.js';
+import {SERVICE, normalizeDraft} from './protocol.js';
 import {PredictionFlights} from './host-flight.js';
 
 // Dependency injection keeps Host behavior testable without loading the Desktop runtime.
@@ -84,11 +84,13 @@ export function createComposerPredictionsClass({TypertRemoteService, RemoteError
       });
       this.saves = operation.catch(() => {}); return operation;
     }
-    predict(sessionId, sourceSeq, signal) {
+    predict(sessionId, sourceSeq, signal) {return this.runPrediction(sessionId, sourceSeq, signal, '');}
+    predictDraft(sessionId, sourceSeq, draft, signal) {return this.runPrediction(sessionId, sourceSeq, signal, normalizeDraft(draft));}
+    runPrediction(sessionId, sourceSeq, signal, continuation) {
       this.assertOwner(); this.syncSettings();
       const settings = this.values(), start = now();
       const timings = {contextMs: 0, prepareMs: 0, firstTextMs: null, totalMs: 0};
-      const result = fields => ({...fields, sourceSeq, meta: {timings: {...timings, totalMs: Math.max(0, now() - start)}, cached: false}});
+      const result = fields => ({...fields, sourceSeq, ...(continuation ? {draft: continuation} : {}), meta: {timings: {...timings, totalMs: Math.max(0, now() - start)}, cached: false}});
       const none = reason => result({status: 'skipped', reason, text: null});
       if (signal?.aborted) return Promise.resolve(none('cancelled'));
       if (this.closed || !settings.enabled) return Promise.resolve(none('disabled'));
@@ -97,26 +99,29 @@ export function createComposerPredictionsClass({TypertRemoteService, RemoteError
       if (!session || session.header.origin === 'subagent') return Promise.resolve(none('session-unavailable'));
       const boundary = this.ctx.sessionProjections.stateOf(session, PROJECTION);
       if (!boundary || boundary.running || boundary.sourceSeq !== sourceSeq) return Promise.resolve(none('stale-turn'));
-      const fingerprint = JSON.stringify(settings), cached = this.cache.get(sessionId);
-      if (cached?.sourceSeq === sourceSeq && cached.fingerprint === fingerprint) return Promise.resolve({...cached.value, meta: {...cached.value.meta, cached: true}});
+      const fingerprint = JSON.stringify(settings), draftKey = continuation ? `draft\u0000${continuation}` : '';
+      const cached = this.cache.get(sessionId);
+      if (cached?.sourceSeq === sourceSeq && cached.fingerprint === fingerprint && cached.draftKey === draftKey) return Promise.resolve({...cached.value, meta: {...cached.value.meta, cached: true}});
       const errorResult = error => result({status: 'error', text: null, message: error?.message || 'Prediction failed'});
-      return this.flights.run(sessionId, {sourceSeq, fingerprint, timeoutMs: settings.timeoutMs,
+      return this.flights.run(sessionId, {sourceSeq, fingerprint, draftKey, timeoutMs: settings.timeoutMs,
         cancelResult: () => none('cancelled'),
         timeoutResult: () => result({status: 'error', code: 'timeout', text: null, message: `Prediction timed out after ${settings.timeoutMs} ms. Try again.`}),
         errorResult,
         execute: async lifetime => {
           lifetime.throwIfAborted();
           const contextStart = now();
-          const conversation = contextFromSession(session, settings.contextChars);
+          const conversation = contextFromSession(session, continuation ? Math.min(settings.contextChars, 4000) : settings.contextChars);
           timings.contextMs = Math.max(0, now() - contextStart);
-          if (!conversation.some(m => m.role === 'user') || conversation.at(-1)?.role !== 'assistant') return none('no-completed-answer');
+          const last = conversation.at(-1);
+          if (!conversation.some(m => m.role === 'user') || last?.role !== 'assistant') return none('no-completed-answer');
           lifetime.throwIfAborted();
           const prepareStart = now();
           const prepared = await this.ctx.llm.prepareCall({provider: settings.provider, model: settings.model, maxTokens: settings.maxTokens}, lifetime,
             (controls, model) => ({...controls, ...(model.reasoning?.efforts[0] ? {reasoningEffort: model.reasoning.efforts[0].id} : {})}));
           timings.prepareMs = Math.max(0, now() - prepareStart); lifetime.throwIfAborted();
-          const request = {...prepared.config, signal: lifetime, sessionId, system: SYSTEM,
-            messages: [createUserMessage({content: [{type: 'text', text: JSON.stringify(conversation)}], source: {kind: 'composer-predictions'}})], tools: []};
+          const payload = continuation === '' ? conversation : [...conversation.slice(0, -1), {role: last.role, text: last.text + '\n\n[The user is now typing this draft:]'}, {role: 'user', text: continuation}];
+          const request = {...prepared.config, signal: lifetime, sessionId, system: continuation === '' ? SYSTEM : SYSTEM_DRAFT,
+            messages: [createUserMessage({content: [{type: 'text', text: JSON.stringify(payload)}], source: {kind: 'composer-predictions'}})], tools: []};
           async function* measured(stream) {
             for await (const chunk of stream) {
               if (timings.firstTextMs === null && chunk.type === 'text-delta' && chunk.text) timings.firstTextMs = Math.max(0, now() - start);
@@ -131,7 +136,7 @@ export function createComposerPredictionsClass({TypertRemoteService, RemoteError
         },
         onComplete: value => {
           if (value.status !== 'ready' && value.status !== 'empty') return;
-          this.cache.set(sessionId, {sourceSeq, fingerprint, value});
+          this.cache.set(sessionId, {sourceSeq, fingerprint, draftKey, value});
           if (this.cache.size > 128) this.cache.delete(this.cache.keys().next().value);
         }
       }, signal);

@@ -108,3 +108,24 @@ test('safe context fallback uses canonical derivation; unavailable active nodes 
  const messages=[message('user','a'),message('assistant','b')];assert.deepEqual(contextFromSession({deriveMessages:()=>messages},100),contextFromMessages(messages,100));
  assert.throws(()=>contextFromSession({surface:{nodes:[1]},eventAt:()=>undefined,deriveEventMessage:()=>null},100),/unavailable/);
 });
+test('draft prediction carries draft-anchored result and echoes the exact draft',async()=>{
+ let captured;
+ const f=fixture({prepare:async()=>{
+  return {config:{},stream:async function*(){yield{type:'text-delta',text:' bug'};yield{type:'finish',reason:{kind:'stop'}};}};}});
+ const p=await f.service.predictDraft('s',10,'fix the',null);
+ assert.equal(p.status,'ready');assert.equal(p.text,'bug');assert.equal(p.draft,'fix the');
+ assert.equal(p.meta.cached,false);assert.equal(f.calls,1);
+});
+test('draft prediction caches per exact draft text and misses on any change',async()=>{
+ const wait=deferred();const f=fixture({prepare:()=>wait.promise});
+ const first=f.service.predictDraft('s',10,'fix the',null);wait.resolve(prepared());await first;
+ assert.equal(f.calls,1);
+ const hit=await f.service.predictDraft('s',10,'fix the',null);assert.equal(hit.meta.cached,true);assert.equal(f.calls,1);
+ const miss=await f.service.predictDraft('s',10,'fix the bug',null);assert.equal(miss.meta.cached,false);assert.equal(f.calls,2);
+});
+test('draft and whole-message predictions never share a cache entry',async()=>{
+ const wait=deferred();const f=fixture({prepare:()=>wait.promise});
+ const whole=f.service.predict('s',10);wait.resolve(prepared());await whole;
+ const draft=await f.service.predictDraft('s',10,'fix the',null);assert.equal(draft.meta.cached,false);assert.equal(f.calls,2);
+ assert.equal(draft.draft,'fix the');assert.equal(whole.draft,undefined);
+});

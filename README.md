@@ -1,10 +1,11 @@
 # dsh-nextline
 
-**Nextline — 输入预测**：DSH 回复结束后，使用独立选择的模型，建议一条完整的下一条用户消息。建议出现在输入框上方；点击或按 Tab 只填入草稿，**绝不自动发送，也不覆盖已有草稿**。
+**Nextline — 输入预测**：DSH 回复结束后，使用独立选择的模型，建议一条完整的下一条用户消息；输入框已有文字时按 Tab，则按当前草稿内容续写补全。建议出现在输入框上方；点击或按 Tab 只填入草稿，**绝不自动发送，也不覆盖已有草稿**。
 
 Next-message suggestions for DeepSeek Harness, with an independently selected prediction model. Suggestions become editable drafts, never automatic messages.
 
-- 自动预测或空输入框中按 Tab 请求，再按 Tab 接受。
+- 自动预测或空输入框中按 Tab 请求整条消息，已有文字时按 Tab 续写当前草稿，再按 Tab 接受。
+- 建议锚定请求时的草稿内容：文字一有变化即作废，重新按 Tab 按新内容再次预测。
 - 固定单行显示，超出省略；鼠标悬停查看全文。
 - 模型与主会话独立，复用 DSH 已配置的提供商和凭据。
 - 中文 / English、Sparkles 图标、主题适配、持久化设置。
@@ -32,7 +33,7 @@ Next-message suggestions for DeepSeek Harness, with an independently selected pr
 首个公开版本仅声明支持 **DSH `0.2.1-rc.5`** 的 Desktop / Web 会话界面。Node.js 24+ 用于本地构建和测试。
 
 - 作者的 Windows Desktop rc.5 环境验证过 Host 配置/RPC、会话上下文、前端插槽恢复和插件禁用/启用生命周期。
-- 40 项自动化回归测试覆盖预测上下文、超时、独立取消、缓存竞争、配置重连、Tab 决策、显示结构及导航图标适配。
+- 47 项自动化回归测试覆盖预测上下文、超时、独立取消、缓存竞争、配置重连、Tab 决策（含草稿内容锚点）、显示结构及导航图标适配。
 - 已补充作者提供的设置页与自动预测实机截图；截图确认当前环境的界面展示和建议生成，不单独证明点击/Tab/悬浮/中文输入法等完整交互均通过。
 - 没有独立验证其他操作系统、CLI/Web 的完整交互及所有主题视觉。
 - **尚未获得 dsh.so 的独立 Verified 认证**；版本限制不代表官方认证。
@@ -44,19 +45,19 @@ Next-message suggestions for DeepSeek Harness, with an independently selected pr
 在 DSH「设置 → 插件」的组合包安装入口粘贴：
 
 ```text
-github:jesongit/dsh-nextline#v1.0.0
+github:jesongit/dsh-nextline#v1.1.0
 ```
 
-或从 [GitHub Releases](https://github.com/jesongit/dsh-nextline/releases/tag/v1.0.0) 下载 `dsh-nextline-1.0.0.tgz`，选择本地包安装。发行包包含预构建 Client，不需要授权安装脚本。不要求安装 npm 上的同名包；本版只在 GitHub 发布。
+或从 [GitHub Releases](https://github.com/jesongit/dsh-nextline/releases/tag/v1.1.0) 下载 `dsh-nextline-1.1.0.tgz`，选择本地包安装。发行包包含预构建 Client，不需要授权安装脚本。不要求安装 npm 上的同名包；本版只在 GitHub 发布。
 
 ### CLI 管理的 Web profile（安装流程未实测）
 
 以下为命令行安装方式，尚未完成独立端到端验证。先确认 `dsh --version` 为 `0.2.1-rc.5`，再替换下面的 `web` 为自己的 **非 Desktop** profile：
 
 ```sh
-dsh plugin --profile web add github:jesongit/dsh-nextline#v1.0.0
+dsh plugin --profile web add github:jesongit/dsh-nextline#v1.1.0
 # 或使用已下载的预构建包：
-dsh plugin --profile web add ./dsh-nextline-1.0.0.tgz
+dsh plugin --profile web add ./dsh-nextline-1.1.0.tgz
 ```
 
 不要用另一版本的 npm CLI 管理 Desktop 保留 profile。普通启用/禁用通过宿主客户端同步；现有 npm 模块升级是否需要重启以 DSH 插件管理结果为准，不承诺所有更新无需重启。
@@ -73,14 +74,15 @@ dsh plugin --profile web add ./dsh-nextline-1.0.0.tgz
 2. 选择提供商与预测模型，保存。首次安装不预选模型，因此不会自行发起模型请求。
 3. 正常完成一轮对话，保持输入框为空；开启自动预测时，稳定 350ms 后请求建议。
 4. 点击建议或在原输入框按 Tab，全文填入草稿；检查后自行发送。
-5. 关闭自动预测时，在聚焦的空输入框按 Tab 请求，再按 Tab 接受；生成时重复 Tab 不重复请求。也可以点击预测/重试入口。
+5. 关闭自动预测时，在聚焦的输入框按 Tab 请求，再按 Tab 接受；生成时重复 Tab 不重复请求。也可以点击预测/重试入口。空输入框预测整条消息；已有文字时按当前草稿内容请求续写，接受后追加到光标处（光标未动时即草稿末尾）。
+6. 建议**锚定请求时的草稿内容**：接受前只要文字发生变化（输入、删除、粘贴），旧建议立即作废，再按 Tab 会以当前内容重新预测；删掉文字回到空输入框则恢复整条消息预测。同一轮次内相同配置、相同草稿内容会命中进程内缓存。
 
 输入文字、添加附件或开始新一轮会取消预测。需要正常完成的主会话轮次；停止/失败轮次、子代理、附件/命令/提交状态或禁用输入时不触发。模型可返回无建议；超时可重试。接受/忽略状态只保持当前组件生命周期，同轮次同配置可命中进程内缓存。
 
 ## 隐私、费用与安全 / Privacy and cost
 
-- 将当前会话近期的 **user / assistant 文本**发送给你选择的预测提供商，**可能产生正常模型费用**。
-- 不主动读取工具结果、reasoning、文件、图片或输入草稿；文本消息里本来就存在的敏感信息仍可能随上下文发送，请按自己的数据政策选择提供商。
+- 将当前会话近期的 **user / assistant 文本**发送给你选择的预测提供商，**可能产生正常模型费用**；对非空草稿按 Tab 续写时，该草稿原文会随上下文一并发送。
+- 不主动读取工具结果、reasoning、文件或图片；文本消息里本来就存在的敏感信息仍可能随上下文发送，请按自己的数据政策选择提供商。
 - 不创建额外遥测、分析或固定外传接口；模型请求经 DSH 已配置的提供商路由。
 - 预测请求没有工具，不启动主 Agent；不执行模型生成的命令，不自动发送消息。
 - 有上下文/输出/超时上限、轮次栅栏、独立取消与内存缓存；不保存磁盘预测缓存。提供商是否立即释放网络资源取决于其取消支持。
@@ -91,7 +93,7 @@ dsh plugin --profile web add ./dsh-nextline-1.0.0.tgz
 ## 实现与已知限制
 
 - Host Session projection 发布完成轮次；Client 使用 `conversation.input.dock` 与官方输入/会话 hooks。不是覆盖输入框 placeholder 的 ghost text。
-- 上下文沿有效 surface 尾部提取，保留宿主消息替换语义；旧 API 缺失时使用宿主标准派生，节点不完整时关闭预测。
+- 上下文沿有效 surface 尾部提取，保留宿主消息替换语义；旧 API 缺失时使用宿主标准派生，节点不完整时关闭预测。草稿续写请求把草稿原文作为最后一条 user 消息拼进上下文，并使用专用的续写系统提示词；草稿最多取前 8000 字符，上下文预算相应收紧到 4000 字符。
 - Host peer dependencies 通过 DSH runtime resolution 解析；无机器路径扫描，无本地绝对路径，无捆绑第二份 DSH/Cordis。
 - 配置读取与流订阅独立启动，带有版本/实例栅栏、超时、有限退避重连；词典、订阅、监听器随插件卸载清理。
 - **导航图标兼容适配**：rc.5 不提供自定义 settings nav 图标字段。本插件按当前本地化标题精确匹配设置导航的 `svg + span` 按钮，将自身默认齿轮替换为同源 Sparkles，保留宿主 class。使用合并触发的 MutationObserver；卸载断开、取消计时并还原。结构不符就不改；宿主升级可能使它失效。不会修改其他导航项或 DSH 核心文件。

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialBoundary, foldBoundary, contextFromMessages, cleanPrediction, collectPrediction, validateSettings} from '../engine.js';
-import {descriptors} from '../protocol.js';
+import {initialBoundary, foldBoundary, contextFromMessages, cleanPrediction, collectPrediction, validateSettings, SYSTEM, SYSTEM_DRAFT} from '../engine.js';
+import {descriptors, normalizeDraft, MAX_DRAFT_CHARS} from '../protocol.js';
 test('completed-turn boundary is invalidated on new input/start and skips failed turns', () => {
  let s=initialBoundary();
  assert.equal(foldBoundary(s,{type:'tool/result'}),s);
@@ -38,4 +38,13 @@ test('remote inputs are strict and cancellable predict never accepts invalid tur
  const d=descriptors().find(d=>d.method==='predict');assert.deepEqual(d.cancellation,{parameter:'signal'});
  assert.throws(()=>d.parameters[1].codec.create().parse(-1));assert.equal(d.parameters[1].codec.create().parse(4),4);
  assert.throws(()=>d.parameters[0].codec.create().parse(''));
+});
+test('draft continuation has a dedicated strict prompt and its own strict wire method',()=>{
+ assert.ok(SYSTEM_DRAFT.includes('continuation')||SYSTEM_DRAFT.includes('draft'));
+ assert.ok(!SYSTEM.includes('[The user is now typing'));
+ const predict=descriptors().find(d=>d.method==='predict'),draft=descriptors().find(d=>d.method==='predictDraft');
+ assert.equal(predict.parameters.length,2);assert.equal(draft.parameters.length,3);
+ assert.equal(draft.parameters[2].name,'draft');
+ assert.equal(normalizeDraft(undefined),'');assert.equal(normalizeDraft(null),'');assert.equal(normalizeDraft('  '),'  ');
+ assert.throws(()=>normalizeDraft('x'.repeat(MAX_DRAFT_CHARS+1)));assert.throws(()=>normalizeDraft(7));
 });

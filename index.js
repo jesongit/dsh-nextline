@@ -23,7 +23,7 @@ export const Config = Schema.object({
 });
 const ComposerPredictions = createComposerPredictionsClass({TypertRemoteService, RemoteError, z, createUserMessage});
 // Invoke the public stage-3 decorator initializer in plain JavaScript.
-for (const method of ['readSettings', 'saveSettings', 'models', 'predict', 'watchSettings']) {
+for (const method of ['readSettings', 'saveSettings', 'models', 'predict', 'predictDraft', 'watchSettings']) {
   const marker = method === 'watchSettings' ? Remote({mode: 'stream'}) : Remote;
   marker(ComposerPredictions.prototype[method], {name: method, private: false, static: false, addInitializer(fn) {fn.call(Object.create(ComposerPredictions.prototype));}});
 }
@@ -42,7 +42,8 @@ export function apply(ctx, config) {
       }, additionalProperties: false},
       provider: {type: 'string', description: 'Provider route for models.'},
       sessionId: {type: 'string', description: 'Session to predict for; defaults to the calling session.'},
-      sourceSeq: {type: 'integer', description: 'Nonnegative exact completed-turn sequence; defaults to the current eligible boundary.'}
+      sourceSeq: {type: 'integer', description: 'Nonnegative exact completed-turn sequence; defaults to the current eligible boundary.'},
+      draft: {type: 'string', description: 'Current composer draft to continue; anchors the prediction to this exact text instead of proposing a whole next message.'}
     }, required: ['action'], additionalProperties: false},
     output: {schema: {type: 'object', additionalProperties: true}, render: (_args, value) => [{type: 'text', text: JSON.stringify(value)}]},
     isConcurrencySafe: args => args.action !== 'configure',
@@ -55,7 +56,8 @@ export function apply(ctx, config) {
         const session = id && ctx.sessions.get(id);
         const boundary = session && ctx.sessionProjections.stateOf(session, PROJECTION);
         if (!session || !boundary || boundary.sourceSeq < 0) return {status: 'skipped', reason: 'no-completed-turn', text: null};
-        return service.predict(id, args.sourceSeq ?? boundary.sourceSeq, exec.signal);
+        return args.draft !== undefined ? service.predictDraft(id, args.sourceSeq ?? boundary.sourceSeq, args.draft, exec.signal)
+          : service.predict(id, args.sourceSeq ?? boundary.sourceSeq, exec.signal);
       }
       throw new Error('Unknown prediction action');
     }

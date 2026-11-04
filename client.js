@@ -14,11 +14,22 @@ const codec = (name, parse) => ({mode: 'strict', typeSymbol: `${PACKAGE}#${name}
 const json = codec('Json', jsonValue);
 const sessionId = codec('SessionId', v => {if (typeof v !== 'string' || !v || v.length > 200) throw new Error('Invalid sessionId'); return v;});
 const sourceSeq = codec('SourceSeq', v => {if (!Number.isSafeInteger(v) || v < 0) throw new Error('Invalid sourceSeq'); return v;});
+const MAX_DRAFT_CHARS = 8000;
+function normalizeDraft(value) {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string' || value.length > MAX_DRAFT_CHARS) throw new Error(`Invalid draft (string up to ${MAX_DRAFT_CHARS} characters)`);
+  return value;
+}
+const draft = codec('Draft', v => {
+  if (typeof v !== 'string' || v.length > MAX_DRAFT_CHARS) throw new Error(`Invalid draft (string up to ${MAX_DRAFT_CHARS} characters)`);
+  return v;
+});
 const string = codec('Provider', v => {if (typeof v !== 'string' || v.length > 200) throw new Error('Invalid provider'); return v;});
 const settings = codec('SettingsPatch', v => {const x = jsonValue(v); if (!x || Array.isArray(x) || typeof x !== 'object') throw new Error('Expected settings object'); return x;});
 const specs = [
   ['readSettings', []], ['saveSettings', [['patch', settings]]], ['models', [['provider', string]]], ['watchSettings', [], true, true],
-  ['predict', [['sessionId', sessionId], ['sourceSeq', sourceSeq]], true]
+  ['predict', [['sessionId', sessionId], ['sourceSeq', sourceSeq]], true],
+  ['predictDraft', [['sessionId', sessionId], ['sourceSeq', sourceSeq], ['draft', draft]], true]
 ];
 function descriptors() {
   return specs.map(([method, params, cancellation, stream]) => ({
@@ -34,15 +45,28 @@ function reflection() {
     {kind: 'method', name: 'saveSettings', signature: 'saveSettings(patch: object): Promise<object>', summary: 'Persist a validated configuration patch.'},
     {kind: 'method', name: 'watchSettings', signature: 'watchSettings(signal: AbortSignal): AsyncIterable<object>', summary: 'Subscribe to versioned settings snapshots for this connection generation.'},
     {kind: 'method', name: 'models', signature: 'models(provider: string): Promise<object[]>', summary: 'List models for an existing DSH provider.'},
-    {kind: 'method', name: 'predict', signature: 'predict(sessionId: string, sourceSeq: number, signal: AbortSignal): Promise<object>', summary: 'Generate one suggestion for an exact completed turn without sending it.'}
+    {kind: 'method', name: 'predict', signature: 'predict(sessionId: string, sourceSeq: number, signal: AbortSignal): Promise<object>', summary: 'Generate one whole-message suggestion for an exact completed turn without sending it.'},
+    {kind: 'method', name: 'predictDraft', signature: 'predictDraft(sessionId: string, sourceSeq: number, draft: string, signal: AbortSignal): Promise<object>', summary: 'Generate one continuation for the exact given draft text at a completed turn without sending it.'}
   ], types: []}], objects: [], events: []};
 }
 
 // Decide only after the host's menus, IME and composer routing have passed.
-function tabPredictionAction({eligible, status, resultSeq, sourceSeq, dismissed, accepted, pending}) {
+// Suggestions are anchored to the exact draft text the composer showed when the
+// prediction was requested: any content change invalidates and re-predicts.
+function draftAnchorKey(draft) {
+  const text = typeof draft === 'string' ? draft : '';
+  const trimmed = text.trim();
+  return trimmed === '' ? '' : text.slice(0, 8000);
+}
+function anchorMatches(expected, actual) {
+  const e = draftAnchorKey(expected), a = draftAnchorKey(actual);
+  // A whole-message suggestion (no anchor) belongs to the empty draft only.
+  return e === '' ? a === '' : e === a;
+}
+function tabPredictionAction({eligible, status, resultSeq, sourceSeq, dismissed, accepted, pending, anchor, resultAnchor}) {
   if (!eligible) return 'pass';
   if (pending || status === 'loading') return 'wait';
-  if (status === 'ready' && resultSeq === sourceSeq && !dismissed && !accepted) return 'accept';
+  if (status === 'ready' && resultSeq === sourceSeq && anchorMatches(anchor, resultAnchor) && !dismissed && !accepted) return 'accept';
   return 'request';
 }
 
@@ -230,23 +254,23 @@ function installPredictionNavIcon({document: doc = globalThis.document, Observer
 }
 
 const en = {
-  "meta":{"title":"Nextline — Input Predictions","description":"Suggests your next message after a completed reply, with an independently selected model. Never sends automatically."},
+  "meta":{"title":"Nextline — Input Predictions","description":"Suggests your next message after a completed reply and continues a draft in progress, with an independently selected model. Never sends automatically."},
   "title":"Input predictions","intro":"After a reply finishes, suggest one useful next message. Accept it into an editable draft; sending is always up to you.",
-  "enabled":"Enable predictions","enabledHint":"Suggestions never replace your text or send a message.","automatic":"Generate after replies","automaticHint":"When off, press Tab in the focused empty composer or click to predict. Press Tab again to accept a suggestion.",
+  "enabled":"Enable predictions","enabledHint":"Suggestions never replace your text or send a message.","automatic":"Generate after replies","automaticHint":"When off, press Tab in the focused composer or click to predict: an empty composer suggests a whole message, existing text continues your draft. Press Tab again to accept; any edit re-predicts.",
   "provider":"Prediction provider","providerHint":"Reuse a provider already configured in Models.","chooseProvider":"Select a provider","model":"Prediction model","modelHint":"Independent of the model used in your conversation.","chooseModel":"Select or enter a model ID",
   "advanced":"Limits and performance","context":"Context characters","tokens":"Maximum output tokens","timeout":"Timeout (milliseconds)",
-  "privacy":"Only recent text from the current conversation is sent to the selected prediction provider. No draft text, reasoning, file contents, or tool results are included. Normal provider charges may apply. Suggestions may be wrong; review before sending.",
-  "save":"Save settings","saving":"Saving…","saved":"Saved","saveFailed":"Could not save settings.","loading":"Loading settings…","configFailed":"Prediction settings are unavailable. Reconnecting automatically.","noSuggestion":"No useful next-message suggestion right now.","timedOut":"Prediction timed out. Retry or adjust the timeout in settings.","diagnostics":"Performance diagnostics (ms, this page only)","retry":"Retry","dismiss":"Dismiss","generate":"Suggest a next message","generating":"Predicting your next message…","suggestion":"Suggested next message","insert":"Use suggestion","failed":"Prediction failed.","draftChanged":"Your draft changed. It was not overwritten."
+  "privacy":"Only recent text from the current conversation is sent to the selected prediction provider; pressing Tab on a non-empty draft also sends that draft to continue it. No reasoning, file contents, or tool results are included. Normal provider charges may apply. Suggestions may be wrong; review before sending.",
+  "save":"Save settings","saving":"Saving…","saved":"Saved","saveFailed":"Could not save settings.","loading":"Loading settings…","configFailed":"Prediction settings are unavailable. Reconnecting automatically.","noSuggestion":"No useful next-message suggestion right now.","timedOut":"Prediction timed out. Retry or adjust the timeout in settings.","diagnostics":"Performance diagnostics (ms, this page only)","retry":"Retry","dismiss":"Dismiss","generate":"Suggest a next message","generating":"Predicting your next message…","suggestion":"Suggested next message","insert":"Use suggestion","failed":"Prediction failed.","draftChanged":"Your draft changed. Press Tab to predict again."
 }
 ;
 const zh = {
-  "meta":{"title":"Nextline — 输入预测","description":"回复结束后预测下一条消息，可独立选择预测模型。仅填入草稿，绝不自动发送。"},
+  "meta":{"title":"Nextline — 输入预测","description":"回复结束后预测下一条消息，输入已有文字时续写当前草稿；可独立选择预测模型。仅填入草稿，绝不自动发送。"},
   "title":"输入预测","intro":"回复结束后，建议一条有用的下一步消息。接受后填入可编辑草稿，仍由你决定是否发送。",
-  "enabled":"启用输入预测","enabledHint":"建议不会覆盖你已输入的文字，也不会自动发送。","automatic":"回复后自动预测","automaticHint":"关闭后，空输入框获得焦点时按 Tab 或点击按钮请求预测；有建议时再按 Tab 填入。",
+  "enabled":"启用输入预测","enabledHint":"建议不会覆盖你已输入的文字，也不会自动发送。","automatic":"回复后自动预测","automaticHint":"关闭后，聚焦输入框按 Tab 或点击按钮请求预测：空输入框预测整条消息，已有文字则续写当前草稿；有建议时再按 Tab 填入，文字一变即作废重测。",
   "provider":"预测提供商","providerHint":"复用「模型」中已配置的提供商和凭据。","chooseProvider":"选择提供商","model":"预测模型","modelHint":"独立于当前会话模型，不会修改主模型。","chooseModel":"选择或输入模型 ID",
   "advanced":"用量与性能限制","context":"上下文字符上限","tokens":"输出 Token 上限","timeout":"超时（毫秒）",
-  "privacy":"仅将当前会话近期的对话文本发送至所选预测提供商，不发送输入草稿、思考过程、文件内容或工具结果。模型请求可能产生正常费用。建议可能不符合你的意图，请检查后再发送。",
-  "save":"保存设置","saving":"正在保存…","saved":"已保存","saveFailed":"保存失败。","loading":"正在加载设置…","configFailed":"输入预测配置暂不可用，正在自动重连。","noSuggestion":"当前没有合适的下一条消息建议。","timedOut":"预测超时，请重试或在设置中调整超时。","diagnostics":"性能诊断（毫秒，仅本次页面）","retry":"重试","dismiss":"忽略","generate":"预测下一条消息","generating":"正在预测下一条消息…","suggestion":"下一条消息建议","insert":"填入草稿","failed":"预测失败。","draftChanged":"草稿已改变，未覆盖你的输入。"
+  "privacy":"仅将当前会话近期的对话文本发送至所选预测提供商；对已有文字按 Tab 续写时，会一并发送该草稿原文。不发送思考过程、文件内容或工具结果。模型请求可能产生正常费用。建议可能不符合你的意图，请检查后再发送。",
+  "save":"保存设置","saving":"正在保存…","saved":"已保存","saveFailed":"保存失败。","loading":"正在加载设置…","configFailed":"输入预测配置暂不可用，正在自动重连。","noSuggestion":"当前没有合适的下一条消息建议。","timedOut":"预测超时，请重试或在设置中调整超时。","diagnostics":"性能诊断（毫秒，仅本次页面）","retry":"重试","dismiss":"忽略","generate":"预测下一条消息","generating":"正在预测下一条消息…","suggestion":"下一条消息建议","insert":"填入草稿","failed":"预测失败。","draftChanged":"草稿已改变，请重新按 Tab 预测。"
 }
 ;
 function clientPlugin(React) {
@@ -261,7 +285,7 @@ function clientPlugin(React) {
     const t = ctx.locale.bind(localeNamespace);
     ctx.effect(() => installPredictionNavIcon({label: () => t('title'), subscribe: fn => ctx.locale.subscribe(fn)}), 'composer-predictions: settings nav Sparkles');
     const api = ctx.get('remote.composerPredictions');
-    const timings = {rpcMountMs: Math.round(performance.now() - activationStarted)};
+    const timings = {rpcMountMs: Math.round(performance.now() - activationStarted), build: 'draft-anchor-v2'};
     const store = createSettingsStore({readSettings: () => call('readSettings'), watchSettings: signal => api.watchSettings(signal),
       onTiming: (name, ms) => {timings[name] = Math.round(ms); if (timings.firstConfigReadyMs === undefined) timings.firstConfigReadyMs = Math.round(performance.now() - activationStarted);}});
     const read = store.getSnapshot;
@@ -299,46 +323,51 @@ function clientPlugin(React) {
       const boundary = props.useProjection('composerPredictions');
       const block = props.usePredictionBlock(s => s);
       const [result, setResult] = useState(null);
-      const [manual, setManual] = useState({sourceSeq: -1, nonce: 0});
+      const [manual, setManual] = useState({sourceSeq: -1, nonce: 0, anchor: null});
       const dismissed = useRef(-1), request = useRef(null), accepted = useRef(null);
       const current = useRef(null);
       const sourceSeq = boundary?.sourceSeq ?? -1;
+      const anchor = draftAnchorKey(draft);
       const eligible = !config.syncing && !!settings?.enabled && !!settings?.provider && !!settings?.model && sourceSeq >= 0 && !boundary?.running &&
-        !sessionRunning && !sessionRemoved && !sessionSubagent && !block && inputPhase === 'plain' && draft === '' && attachmentCount === 0;
-      current.current = {eligible, sourceSeq, draftRev};
+        !sessionRunning && !sessionRemoved && !sessionSubagent && !block && inputPhase === 'plain' && attachmentCount === 0;
+      current.current = {eligible, sourceSeq, draftRev, anchor};
       useEffect(() => {
-        if (!eligible || !(settings.automatic || manual.sourceSeq === sourceSeq) || dismissed.current === sourceSeq || accepted.current === sourceSeq) {request.current?.abort(); request.current = null; setResult(null); return;}
+        if (!eligible || !(settings.automatic && anchor === '' || manual.sourceSeq === sourceSeq && manual.anchor === anchor) || dismissed.current === sourceSeq || accepted.current === sourceSeq) {request.current?.abort(); request.current = null; setResult(null); return;}
         const controller = new AbortController();
         request.current = controller;
         let alive = true;
-        setResult({status: 'loading'});
+        setResult({status: 'loading', anchor});
         const timer = setTimeout(() => {
           const started = performance.now();
-          call('predict', props.sessionId, sourceSeq, controller.signal).then(value => {
-            if (alive && current.current.eligible && current.current.sourceSeq === sourceSeq) {
+          // Empty composer predicts a whole message; a draft continues that exact text.
+          // Cancellation signal always travels after the declared business arguments.
+          const whole = anchor === '';
+          call(whole ? 'predict' : 'predictDraft', props.sessionId, sourceSeq, ...(whole ? [controller.signal] : [anchor, controller.signal])).then(value => {
+            if (alive && current.current.eligible && current.current.sourceSeq === sourceSeq && current.current.anchor === anchor) {
               timings.predictionRoundTripMs = Math.round(performance.now() - started);
               timings.lastPrediction = value.meta || null;
-              setResult(value);
+              setResult(anchor === '' ? value : {...value, anchor});
             }
-          }, error => {if (alive && !controller.signal.aborted) setResult({status: 'error', message: error.message});})
+          }, error => {if (alive && !controller.signal.aborted) setResult({status: 'error', message: error.message, anchor});})
             .finally(() => {if (request.current === controller) request.current = null;});
         }, manual.sourceSeq === sourceSeq ? 0 : 350);
         return () => {alive = false; clearTimeout(timer); controller.abort(); if (request.current === controller) request.current = null;};
-      }, [eligible, sourceSeq, draftRev, settings, manual, props.sessionId, config.generation, config.instanceId]);
+      }, [eligible, sourceSeq, anchor, draftRev, settings, manual, props.sessionId, config.generation, config.instanceId]);
       const dismiss = useCallback(() => {dismissed.current = sourceSeq; request.current?.abort(); setResult(null);}, [sourceSeq]);
       const requestPrediction = useCallback(() => {
         if (!current.current?.eligible || request.current || read().settings !== settings || read().syncing) return false;
         const live = props.getPredictionInput();
         const state = live.state.getSnapshot();
         const liveSession = ctx.sessions.binding(props.sessionId)?.session.getSnapshot();
-        if (!liveSession || liveSession.running || liveSession.removed || liveSession.subagent || state.draft !== '' || state.phase !== 'plain' || state.attachmentIds.length || props.getPredictionBlock()) return false;
+        if (!liveSession || liveSession.running || liveSession.removed || liveSession.subagent || state.phase !== 'plain' || state.attachmentIds.length || props.getPredictionBlock()) return false;
+        const liveAnchor = draftAnchorKey(state.draft);
         dismissed.current = -1; accepted.current = null;
         // Immediate latch prevents two Tab events before React's next commit.
         request.current = {abort() {}};
-        setResult({status: 'loading', sourceSeq});
-        setManual(x => ({sourceSeq, nonce: x.nonce + 1}));
+        setResult({status: 'loading', sourceSeq, anchor: liveAnchor});
+        setManual(x => x.sourceSeq === sourceSeq && x.anchor === liveAnchor ? {sourceSeq, anchor: liveAnchor, nonce: x.nonce + 1} : {sourceSeq, anchor: liveAnchor, nonce: 0});
         return true;
-      }, [sourceSeq, settings, props.getPredictionInput, props.getPredictionBlock, props.sessionId]);
+      }, [sourceSeq, settings, manual, props.getPredictionInput, props.getPredictionBlock, props.sessionId]);
       const accept = useCallback(() => {
         const now = current.current;
         if (read().settings !== settings || read().syncing) return false;
@@ -347,10 +376,13 @@ function clientPlugin(React) {
         const liveState = live.state.getSnapshot();
         const liveSession = ctx.sessions.binding(props.sessionId)?.session.getSnapshot();
         if (!liveSession || liveSession.running || liveSession.removed || liveSession.subagent) return false;
-        if (liveState.draft !== '' || liveState.phase !== 'plain' || liveState.attachmentIds.length || props.getPredictionBlock()) return false;
+        if (liveState.phase !== 'plain' || liveState.attachmentIds.length || props.getPredictionBlock()) return false;
+        // The suggestion is anchored to the draft the request was made from:
+        // accept only while the composer still shows exactly that content.
+        if (!anchorMatches(result.anchor ?? '', draftAnchorKey(liveState.draft))) return false;
         const span = props.inputActions.captureInsertion();
-        if (span.draftRev !== now.draftRev || span.start !== 0 || span.end !== 0) return false;
-        if (!props.inputActions.insertText(result.text, span)) {setResult({status: 'error', message: t('draftChanged')}); return false;}
+        if (span.draftRev !== now.draftRev) return false;
+        if (!props.inputActions.insertText(result.text, span)) {setResult({status: 'error', message: t('draftChanged'), anchor: result.anchor}); return false;}
         accepted.current = sourceSeq;
         setResult(null); live.focus(); return true;
       }, [result, sourceSeq, settings, props.inputActions, props.getPredictionInput, props.getPredictionBlock]);
@@ -366,7 +398,8 @@ function clientPlugin(React) {
           if (occurrence?.dataset.conversationSession !== props.sessionId || region?.dataset.conversationRegion !== 'composer' || !occurrence.contains(region) || !c.target.closest('[data-composer-input]') || c.target.closest('[data-approval-key], iframe, .xterm, [inert]')) return;
           if (g.code !== 'Tab') return;
           const action = tabPredictionAction({eligible: current.current.eligible, status: result?.status, resultSeq: result?.sourceSeq, sourceSeq,
-            dismissed: dismissed.current === sourceSeq, accepted: accepted.current === sourceSeq, pending: !!request.current});
+            dismissed: dismissed.current === sourceSeq, accepted: accepted.current === sourceSeq, pending: !!request.current,
+            anchor: current.current.anchor, resultAnchor: result?.anchor});
           if (action === 'wait' || (action === 'accept' && accept()) || (action === 'request' && requestPrediction())) event.consume();
         });
       }, [result, eligible, accept, requestPrediction, sourceSeq, props.sessionId]);
@@ -374,8 +407,9 @@ function clientPlugin(React) {
         return surface(t(config.error ? 'configFailed' : 'loading'), config.error && button(t('retry'), () => store.restart()));
       }
       if (!eligible || dismissed.current === sourceSeq || accepted.current === sourceSeq) return null;
-      if (!settings.automatic && manual.sourceSeq !== sourceSeq) return surface(t('generate'), tabHint, {onClick: requestPrediction, label: t('generate')});
+      if (!settings.automatic && !(manual.sourceSeq === sourceSeq && manual.anchor === anchor) && !anchorMatches(result?.anchor, anchor)) return surface(t('generate'), tabHint, {onClick: requestPrediction, label: t('generate')});
       if (!result || result.status === 'skipped' || (result.sourceSeq !== undefined && result.sourceSeq !== sourceSeq)) return null;
+      if (!anchorMatches(result.anchor ?? '', anchor)) return null;
       if (result.status === 'loading') return surface(t('generating'), dismissButton(dismiss));
       if (result.status === 'empty') return surface(t('noSuggestion'), dismissButton(dismiss));
       if (result.status === 'error') return surface(result.code === 'timeout' ? t('timedOut') : t('failed') + ' ' + result.message,
