@@ -30,10 +30,11 @@ Next-message suggestions for DeepSeek Harness, with an independently selected pr
 
 ## 兼容性 / Compatibility
 
-首个公开版本仅声明支持 **DSH `0.2.1-rc.5`** 的 Desktop / Web 会话界面。Node.js 24+ 用于本地构建和测试。
+1.1.1 起以 `engines.dsh: ^0.2.1-rc.5` 声明兼容范围，覆盖 **DSH `0.2.1-rc.5` 至 `0.2.2-rc.1`（0.2.x）** 的 Desktop / Web 会话界面，并已通过 `0.2.2-rc.1` 平台的插件兼容检查。Node.js 24+ 用于本地构建和测试。
 
 - 作者的 Windows Desktop rc.5 环境验证过 Host 配置/RPC、会话上下文、前端插槽恢复和插件禁用/启用生命周期。
 - 47 项自动化回归测试覆盖预测上下文、超时、独立取消、缓存竞争、配置重连、Tab 决策（含草稿内容锚点）、显示结构及导航图标适配。
+- 1.1.1 仅放宽 Host 兼容声明以适配桌面端自更新后的 `0.2.2-rc.1`；预测功能与界面与 1.1.0 完全一致。
 - 已补充作者提供的设置页与自动预测实机截图；截图确认当前环境的界面展示和建议生成，不单独证明点击/Tab/悬浮/中文输入法等完整交互均通过。
 - 没有独立验证其他操作系统、CLI/Web 的完整交互及所有主题视觉。
 - **尚未获得 dsh.so 的独立 Verified 认证**；版本限制不代表官方认证。
@@ -45,19 +46,19 @@ Next-message suggestions for DeepSeek Harness, with an independently selected pr
 在 DSH「设置 → 插件」的组合包安装入口粘贴：
 
 ```text
-github:jesongit/dsh-nextline#v1.1.0
+github:jesongit/dsh-nextline#v1.1.1
 ```
 
-或从 [GitHub Releases](https://github.com/jesongit/dsh-nextline/releases/tag/v1.1.0) 下载 `dsh-nextline-1.1.0.tgz`，选择本地包安装。发行包包含预构建 Client，不需要授权安装脚本。不要求安装 npm 上的同名包；本版只在 GitHub 发布。
+或从 [GitHub Releases](https://github.com/jesongit/dsh-nextline/releases/tag/v1.1.1) 下载 `dsh-nextline-1.1.1.tgz`，选择本地包安装。发行包包含预构建 Client，不需要授权安装脚本。不要求安装 npm 上的同名包；本版只在 GitHub 发布。
 
 ### CLI 管理的 Web profile（安装流程未实测）
 
-以下为命令行安装方式，尚未完成独立端到端验证。先确认 `dsh --version` 为 `0.2.1-rc.5`，再替换下面的 `web` 为自己的 **非 Desktop** profile：
+以下为命令行安装方式，尚未完成独立端到端验证。先确认 `dsh --version` 为 `0.2.1-rc.5` 或 `0.2.2-rc.1`，再替换下面的 `web` 为自己的 **非 Desktop** profile：
 
 ```sh
-dsh plugin --profile web add github:jesongit/dsh-nextline#v1.1.0
+dsh plugin --profile web add github:jesongit/dsh-nextline#v1.1.1
 # 或使用已下载的预构建包：
-dsh plugin --profile web add ./dsh-nextline-1.1.0.tgz
+dsh plugin --profile web add ./dsh-nextline-1.1.1.tgz
 ```
 
 不要用另一版本的 npm CLI 管理 Desktop 保留 profile。普通启用/禁用通过宿主客户端同步；现有 npm 模块升级是否需要重启以 DSH 插件管理结果为准，不承诺所有更新无需重启。

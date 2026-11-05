@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 — 2026-11-06
+
+- Compatibility only: widened the declared Host range from the exact `engines.dsh: 0.2.1-rc.5` to `^0.2.1-rc.5` (the two `@deepseek-ai/dsh-*` peer ranges likewise), so DSH desktop versions through `0.2.2-rc.1` pass the platform's `evaluatePluginCompatibility` check instead of being rejected as `incompatible-version` and refusing to enable.
+- Verified the Host/Client APIs this plugin consumes are unchanged in `0.2.2-rc.1` (`sessionProjections` legacy read path, typert `Remote` decorator, `llm.prepareCall`/`createUserMessage`, `conversation.input`/`blocks`, `shortcuts.observeFixedInput`, and the `settings.section` / `conversation.input.dock` slots).
+- No functional, UI, or settings changes; prediction behavior is identical to 1.1.0.
+
 ## 1.1.0 — 2026-11-04
 
 - Tab while the composer already has text now continues the current draft instead of only whole-message suggestions. Suggestions are anchored to the exact draft content at request time: any edit invalidates the pending suggestion and Tab re-predicts from the new content; acceptance appends the continuation at the caret.

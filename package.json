@@ -1,6 +1,6 @@
 {
   "name": "dsh-nextline",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Predict your next complete message or continue the current draft in DeepSeek Harness with an independently selected model. Draft-only, never auto-send.",
   "license": "MIT",
   "author": "jesongit",
@@ -52,11 +52,11 @@
   ],
   "engines": {
     "node": ">=24",
-    "dsh": "0.2.1-rc.5"
+    "dsh": "^0.2.1-rc.5"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
-    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-llm": "^0.2.1-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "^0.2.1-rc.5",
     "@deepseek-ai/schemastery": "^3.18.5"
   },
   "dependencies": {
